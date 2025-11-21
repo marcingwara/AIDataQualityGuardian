@@ -1,134 +1,244 @@
+import os
 import requests
 from src.utils.logger import logger
 
 
-class MetadataClient:
+class TableauMetadataClient:
     """
-    Handles communication with the Tableau Metadata API using GraphQL.
+    Tableau Cloud Metadata API Client (GraphQL)
+    Allows retrieving:
+    - workbooks
+    - dashboards (views)
+    - data sources
+    - fields with data types
+    - lineage (upstream/downstream)
     """
 
-    def __init__(self, server, site, token_name, token_secret):
-        self.server = server
-        self.site = site
-        self.token_name = token_name
-        self.token_secret = token_secret
+    def __init__(self, auth_token=None, site_id=None):
+        self.server = os.getenv("TABLEAU_CLOUD_URL")
+        self.api_version = "3.22"
 
-        self.auth_token = None
-        self.site_id = None
+        # Auth token & site GUID from REST client
+        self.token = auth_token
+        self.site_id = site_id
 
-    # ---------------------------
-    #   Authentication
-    # ---------------------------
-    def authenticate(self):
-        """
-        Authenticate using a Personal Access Token and retrieve the auth token + site ID.
-        """
-        url = f"{self.server}/api/3.19/auth/signin"
-        payload = {
-            "credentials": {
-                "personalAccessTokenName": self.token_name,
-                "personalAccessTokenSecret": self.token_secret,
-                "site": {"contentUrl": self.site}
-            }
-        }
+        if not self.token or not self.site_id:
+            logger.error("❌ Metadata API requires a valid REST API session.")
+            self.enabled = False
+            return
 
-        logger.info("Authenticating with Tableau...")
+        self.enabled = True
+        self.url = f"{self.server}/api/metadata/graphql"
 
-        response = requests.post(url, json=payload)
-        if response.status_code != 200:
-            logger.error(f"Authentication failed: {response.text}")
-            raise Exception("Tableau authentication failed")
-
-        data = response.json()
-        self.auth_token = data["credentials"]["token"]
-        self.site_id = data["credentials"]["site"]["id"]
-
-        logger.info("Authentication successful.")
-
-    # ---------------------------
-    #   GraphQL Query Runner
-    # ---------------------------
-    def run_graphql_query(self, query):
-        """
-        Executes a GraphQL query against the Tableau Metadata API.
-        """
-
-        if not self.auth_token:
-            self.authenticate()
-
-        url = f"{self.server}/api/metadata/graphql"
+    # ------------------------------------------------------------
+    # GraphQL QUERY EXECUTION
+    # ------------------------------------------------------------
+    def _query(self, query: str, variables: dict = None):
+        if not self.enabled:
+            logger.warning("Metadata API disabled — skipping query.")
+            return None
 
         headers = {
             "Content-Type": "application/json",
-            "X-Tableau-Auth": self.auth_token
+            "X-Tableau-Auth": self.token
         }
 
-        response = requests.post(url, json={"query": query}, headers=headers)
+        payload = {
+            "query": query,
+            "variables": variables or {}
+        }
+
+        response = requests.post(self.url, json=payload, headers=headers)
 
         if response.status_code != 200:
-            logger.error(f"Metadata API error: {response.text}")
-            raise Exception("GraphQL query failed")
+            logger.error(f"❌ GraphQL error: {response.text}")
+            return None
 
         return response.json()
 
-    # ---------------------------
-    #   Fetch Dashboards
-    # ---------------------------
-    def get_dashboards(self):
+    # ------------------------------------------------------------
+    # GET DASHBOARD METADATA (FIELDS + DATASOURCES)
+    # ------------------------------------------------------------
+    def get_dashboard_metadata(self, workbook_id: str):
         """
-        Fetches a list of dashboards from Tableau via GraphQL.
+        Retrieves dashboard → worksheets → fields → types → lineage.
         """
+
+        logger.info(f"🔍 Fetching metadata for workbook {workbook_id}...")
+
+        query = """
+        query GetWorkbookMetadata($id: ID!) {
+          workbook(id: $id) {
+            name
+            sheets {
+              name
+              fields {
+                name
+                dataType
+                role
+                isHidden
+                upstreamTables {
+                  name
+                  fullName
+                }
+              }
+            }
+            upstreamDatasources {
+              name
+              connectionType
+            }
+          }
+        }
+        """
+
+        result = self._query(query, {"id": workbook_id})
+
+        if not result:
+            return None
+
+        return result["data"]["workbook"]
+
+    # ------------------------------------------------------------
+    # GET DATASOURCE FIELDS
+    # ------------------------------------------------------------
+    def get_datasource_fields(self, datasource_id: str):
+        """
+        Returns all fields for a datasource.
+        """
+        logger.info(f"📘 Fetching datasource fields for {datasource_id}...")
+
+        query = """
+        query GetDatasourceFields($id: ID!) {
+          datasource(id: $id) {
+            name
+            fields {
+              name
+              dataType
+              role
+              isHidden
+            }
+          }
+        }
+        """
+
+        result = self._query(query, {"id": datasource_id})
+
+        if not result:
+            return None
+
+        return result["data"]["datasource"]
+
+    # ------------------------------------------------------------
+    # GET FIELD LINEAGE (UPSTREAM PATH)
+    # ------------------------------------------------------------
+    def get_field_lineage(self, field_id: str):
+        """
+        Return lineage for a specific field.
+        """
+        logger.info(f"🔗 Fetching lineage for field {field_id}...")
+
+        query = """
+        query GetFieldLineage($id: ID!) {
+          field(id: $id) {
+            name
+            dataType
+            role
+            upstreamFields {
+              name
+              dataType
+              upstreamTables {
+                name
+                fullName
+              }
+            }
+          }
+        }
+        """
+
+        result = self._query(query, {"id": field_id})
+
+        if not result:
+            return None
+
+        return result["data"]["field"]
+
+    # ------------------------------------------------------------
+    # GET WORKBOOK LIST WITH METADATA SUPPORT
+    # ------------------------------------------------------------
+    def get_all_workbook_metadata(self):
+        """
+        Returns all workbooks + high-level metadata.
+        """
+
+        logger.info("📚 Fetching list of workbooks with metadata...")
+
         query = """
         {
-          dashboards {
+          workbooks {
             id
             name
-            workbook {
-              name
-            }
-            sheets {
-              id
+            projectName
+            owner {
               name
             }
           }
         }
         """
 
-        logger.info("Running Metadata API query for dashboards...")
-        data = self.run_graphql_query(query)
+        result = self._query(query)
 
-        dashboards = data.get("data", {}).get("dashboards", [])
+        if not result:
+            return []
 
-        logger.info(f"Metadata API returned {len(dashboards)} dashboards.")
-        return dashboards
-
-    # ---------------------------
-    #   Fetch Metrics (KPI)
-    # ---------------------------
-    def get_metrics_for_dashboard(self, dashboard_id):
+        return result["data"]["workbooks"]
+        # ------------------------------------------------------------
+    # GET VIEW METADATA
+    # ------------------------------------------------------------
+    def get_view_metadata(self, view_id: str):
         """
-        Fetches metrics/KPI values for a dashboard.
-        (Example GraphQL query – may require adjustment for real data sources)
+        Retrieves metadata for a VIEW (dashboard or sheet):
+        - view name
+        - workbook
+        - fields
+        - data types
+        - lineage
         """
 
-        query = f"""
-        {{
-          dashboard(id: "{dashboard_id}") {{
+        logger.info(f"🧩 Fetching metadata for VIEW {view_id}...")
+
+        query = """
+        query GetViewFields($id: ID!) {
+          view(id: $id) {
+            id
             name
-            worksheets {{
+            workbook {
+              id
               name
-              dataSources {{
-                fields {{
-                  name
-                  dataType
-                }}
-              }}
-            }}
-          }}
-        }}
+            }
+            fields {
+              id
+              name
+              dataType
+              role
+              isHidden
+              upstreamTables {
+                id
+                name
+                fullName
+              }
+            }
+          }
+        }
         """
 
-        logger.info(f"Fetching metrics for dashboard: {dashboard_id}")
+        result = self._query(query, {"id": view_id})
 
-        data = self.run_graphql_query(query)
-        return data.get("data", {})
+        if not result:
+            logger.error(f"❌ No metadata returned for view {view_id}")
+            return None
+
+        if "data" not in result or "view" not in result["data"]:
+            logger.error(f"❌ GraphQL returned invalid structure for view {view_id}: {result}")
+            return None
+
+        return result["data"]["view"]
