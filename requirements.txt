@@ -1,0 +1,10 @@
+requests
+xmltodict
+pandas
+numpy
+scikit-learn
+python-dotenv
+slack_sdk
+jira
+matplotlib
+openpyxl
