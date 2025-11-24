@@ -23,6 +23,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Debug env
+        run: |
+          echo "OPENAI_API_KEY length:"
+          echo ${#OPENAI_API_KEY}
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
       - name: Run AI Data Quality Guardian
         env:
           TABLEAU_CLOUD_URL: ${{ secrets.TABLEAU_CLOUD_URL }}
