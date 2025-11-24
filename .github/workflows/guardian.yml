@@ -2,18 +2,18 @@ name: AI Data Quality Guardian
 
 on:
   schedule:
-    - cron: "0 7 * * *"
-  workflow_dispatch:
+    - cron: "0 7 * * *"   # daily at 07:00 UTC
+  workflow_dispatch:       # manual trigger
 
 jobs:
   run-guardian:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      - name: Set up Python 3.13
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
@@ -25,25 +25,29 @@ jobs:
 
       - name: Run AI Data Quality Guardian
         env:
+          # Tableau
           TABLEAU_CLOUD_URL: ${{ secrets.TABLEAU_CLOUD_URL }}
           TABLEAU_SITE_ID: ${{ secrets.TABLEAU_SITE_ID }}
           TABLEAU_TOKEN_NAME: ${{ secrets.TABLEAU_TOKEN_NAME }}
           TABLEAU_TOKEN_SECRET: ${{ secrets.TABLEAU_TOKEN_SECRET }}
 
+          # OpenAI
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
+          # Slack
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          # SMTP Email
+          SMTP_SERVER: ${{ secrets.SMTP_SERVER }}
           SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
           SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          SMTP_EMAIL_FROM: ${{ secrets.SMTP_EMAIL_FROM }}
+          SMTP_EMAIL_TO: ${{ secrets.SMTP_EMAIL_TO }}
 
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+          # Jira (correct names)
+          JIRA_API_EMAIL: ${{ secrets.JIRA_API_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+          JIRA_BASE_URL: ${{ secrets.JIRA_BASE_URL }}
           JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
 
         run: python -m src.main
