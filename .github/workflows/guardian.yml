@@ -49,5 +49,13 @@ jobs:
           
           echo "OpenAI key length: ${#OPENAI_API_KEY}"
 
+      
+      - name: Debug JIRA secrets (RAW)
+        run: |
+          echo "JIRA_PROJECT_KEY RAW:"
+          printf "%q\n" "$JIRA_PROJECT_KEY"
+          echo "---"
+          echo "Length:"
+          echo "${#JIRA_PROJECT_KEY}"
       - name: Run Guardian
         run: python -m src.main
