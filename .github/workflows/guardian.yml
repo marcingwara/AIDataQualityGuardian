@@ -1,97 +1,88 @@
 name: AI Data Quality Guardian
 
 on:
-  schedule:
-    - cron: "0 7 * * *"
   workflow_dispatch:
+  schedule:
+    - cron: "0 */2 * * *"
+
+permissions:
+  contents: read
 
 jobs:
   run-guardian:
     runs-on: ubuntu-latest
 
     steps:
-      # --- CHECKOUT ---
+      # 1) Repo
       - name: Checkout repo
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      # --- PYTHON SETUP ---
+      # 2) Python
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.13"
+          python-version: "3.10"
 
-      # --- INSTALL DEPENDENCIES ---
-      - name: Install dependencies
+      - name: Upgrade pip
+        run: python -m pip install --upgrade pip
+
+      # 3) Dependencies
+      - name: Install requirements
+        run: python -m pip install -r requirements.txt
+
+      # 4) 🔍 DEBUG — Pokaż wartości zmiennych JIRA (bez wycieku)
+      - name: Debug JIRA env
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          echo "JIRA_URL length: ${#JIRA_URL}"
+          echo "JIRA_EMAIL length: ${#JIRA_EMAIL}"
+          echo "JIRA_API_TOKEN length: ${#JIRA_API_TOKEN}"
+          echo "JIRA_PROJECT_KEY = ${JIRA_PROJECT_KEY}"
 
-      # --- DEBUG SECRETS (NO VALUES SHOWN) ---
-      - name: 🔍 Check JIRA environment (safe)
+      # 5) 🔍 DEBUG — OpenAI
+      - name: Debug OpenAI key
         run: |
-          echo "JIRA_URL set?         $([ -z \"$JIRA_URL\" ] && echo ❌ || echo ✅)"
-          echo "JIRA_EMAIL set?       $([ -z \"$JIRA_EMAIL\" ] && echo ❌ || echo ✅)"
-          echo "JIRA_API_TOKEN set?   $([ -z \"$JIRA_API_TOKEN\" ] && echo ❌ || echo ✅)"
-          echo "JIRA_PROJECT_KEY set? $([ -z \"$JIRA_PROJECT_KEY\" ] && echo ❌ || echo ✅)"
+          echo "OpenAI KEY LENGTH = ${#OPENAI_API_KEY}"
 
+      # 6) 🧪 Test OpenAI API
+      - name: Test OpenAI API
         env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: |
+          python3 << 'EOF'
+          from openai import OpenAI
+          client = OpenAI()
+          models = client.models.list()
+          print("=== OpenAI Model List OK ===")
+          print(models)
+          EOF
+
+      # 7) 🚀 Run Guardian
+      - name: Run python -m src.main
+        env:
+          # OPENAI
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+          # SLACK
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+          # SMTP
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+
+          # JIRA (tylko 4 zmienne!)
           JIRA_URL: ${{ secrets.JIRA_URL }}
           JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
           JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
           JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
 
-      # --- OPENAI CHECK ---
-      - name: 🔍 Test OpenAI API connectivity
-        run: |
-          echo "Testing OpenAI..."
-          python - << 'EOF'
-import os
-import openai
+          # TABLEAU
+          TABLEAU_CLOUD_URL: ${{ secrets.TABLEAU_CLOUD_URL }}
+          TABLEAU_SITE_ID: ${{ secrets.TABLEAU_SITE_ID }}
+          TABLEAU_TOKEN_NAME: ${{ secrets.TABLEAU_TOKEN_NAME }}
+          TABLEAU_TOKEN_SECRET: ${{ secrets.TABLEAU_TOKEN_SECRET }}
 
-key = os.getenv("OPENAI_API_KEY")
-print("Key exists? ", "YES" if key else "NO")
-
-try:
-    from openai import OpenAI
-    client = OpenAI(api_key=key)
-    models = client.models.list()
-    print("OpenAI connection: OK (models received)")
-except Exception as e:
-    print("OpenAI ERROR:", e)
-EOF
-        env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-      # --- SLACK CHECK ---
-      - name: 🔍 Test Slack webhook reachability
-        run: |
-          if [ -z "$SLACK_WEBHOOK_URL" ]; then
-            echo "Slack webhook missing ❌"
-          else
-            echo "Slack webhook exists ✅"
-          fi
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-      # --- MAIN PROGRAM RUN ---
-      - name: Run AI Data Quality Guardian
-        env:
-          TABLEAU_CLOUD_URL:   ${{ secrets.TABLEAU_CLOUD_URL }}
-          TABLEAU_SITE_ID:     ${{ secrets.TABLEAU_SITE_ID }}
-          TABLEAU_TOKEN_NAME:  ${{ secrets.TABLEAU_TOKEN_NAME }}
-          TABLEAU_TOKEN_SECRET:${{ secrets.TABLEAU_TOKEN_SECRET }}
-
-          OPENAI_API_KEY:      ${{ secrets.OPENAI_API_KEY }}
-          SLACK_WEBHOOK_URL:   ${{ secrets.SLACK_WEBHOOK_URL }}
-
-          SMTP_SERVER:         ${{ secrets.SMTP_HOST }}
-          SMTP_USERNAME:       ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD:       ${{ secrets.SMTP_PASSWORD }}
-          SMTP_EMAIL_FROM:     ${{ secrets.EMAIL_FROM }}
-          SMTP_EMAIL_TO:       ${{ secrets.EMAIL_TO }}
-
-          JIRA_URL:            ${{ secrets.JIRA_URL }}
-          JIRA_EMAIL:          ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN:      ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT_KEY:    ${{ secrets.JIRA_PROJECT_KEY }}
         run: python -m src.main
