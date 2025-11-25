@@ -3,62 +3,51 @@ name: AI Data Quality Guardian
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 7 * * *"
+    - cron: "0 */6 * * *"
 
 jobs:
   run-guardian:
     runs-on: ubuntu-latest
 
+    env:
+      JIRA_URL: ${{ secrets.JIRA_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
+
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
+      EMAIL_TO: ${{ secrets.EMAIL_TO }}
+      SMTP_HOST: ${{ secrets.SMTP_HOST }}
+      SMTP_PORT: ${{ secrets.SMTP_PORT }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.10"
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install openai   # <<< KLUCZOWE
 
-      # 🔥 DEBUG — sprawdzamy czy sekrety są poprawnie wczytane
-      - name: Debug secrets
+      - name: Debug ENV (JIRA + OPENAI)
         run: |
           echo "JIRA_URL length: ${#JIRA_URL}"
           echo "JIRA_EMAIL length: ${#JIRA_EMAIL}"
           echo "JIRA_API_TOKEN length: ${#JIRA_API_TOKEN}"
-          echo "JIRA_PROJECT_KEY = ${JIRA_PROJECT_KEY}"
+          echo "JIRA_PROJECT_KEY = $JIRA_PROJECT_KEY"
+          
           echo "OpenAI key length: ${#OPENAI_API_KEY}"
-        env:
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
-      - name: Run AI Data Quality Guardian
-        env:
-          TABLEAU_CLOUD_URL: ${{ secrets.TABLEAU_CLOUD_URL }}
-          TABLEAU_SITE_ID: ${{ secrets.TABLEAU_SITE_ID }}
-          TABLEAU_TOKEN_NAME: ${{ secrets.TABLEAU_TOKEN_NAME }}
-          TABLEAU_TOKEN_SECRET: ${{ secrets.TABLEAU_TOKEN_SECRET }}
-
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          EMAIL_TO: ${{ secrets.EMAIL_TO }}
-
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
-
+      - name: Run Guardian
         run: python -m src.main
