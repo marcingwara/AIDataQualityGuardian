@@ -2,23 +2,17 @@ name: AI Data Quality Guardian
 
 on:
   schedule:
-    - cron: "0 7 * * *"   # Run everyday at 07:00 UTC
-  workflow_dispatch:       # Manual trigger
+    - cron: "0 7 * * *"
+  workflow_dispatch:
 
 jobs:
   run-guardian:
     runs-on: ubuntu-latest
 
     steps:
-      # -------------------------------------------------------
-      # CHECKOUT REPO
-      # -------------------------------------------------------
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # -------------------------------------------------------
-      # PYTHON SETUP
-      # -------------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -29,54 +23,51 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      # -------------------------------------------------------
-      # DEBUG JIRA SECRETS (VERY IMPORTANT)
-      # -------------------------------------------------------
-      - name: Debug JIRA env
-        env:
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
-        run: |
-          echo "🔍 JIRA ENV DEBUG:"
-          echo "JIRA_URL = $JIRA_URL"
-          echo "JIRA_EMAIL length = ${#JIRA_EMAIL}"
-          echo "JIRA_API_TOKEN length = ${#JIRA_API_TOKEN}"
-          echo "JIRA_PROJECT_KEY = $JIRA_PROJECT_KEY"
 
-      # -------------------------------------------------------
-      # DEBUG OPENAI
-      # -------------------------------------------------------
-      - name: Debug OpenAI key
+      ####################################################################
+      # 🔥 🔥 🔥  DEBUG OPENAI — tutaj sprawdzamy prawdziwy klucz
+      ####################################################################
+      - name: Debug OpenAI Key Visibility
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          REAL_OPENAI_KEY: "${{ secrets.OPENAI_API_KEY }}"
         run: |
-          echo "🔍 OPENAI KEY LENGTH: ${#OPENAI_API_KEY}"
+          echo "OpenAI KEY LENGTH (should NOT be 3 stars = ***) :"
+          echo ${#REAL_OPENAI_KEY}
 
-      # -------------------------------------------------------
-      # RUN MAIN APP
-      # -------------------------------------------------------
+      ####################################################################
+      # 🔥  TEST POŁĄCZENIA Z OPENAI — zwróci modele albo error
+      ####################################################################
+      - name: Test OpenAI API connectivity
+        env:
+          OPENAI_API_KEY: "${{ secrets.OPENAI_API_KEY }}"
+        run: |
+          echo "Testing OpenAI API..."
+          curl -s https://api.openai.com/v1/models \
+            -H "Authorization: Bearer $OPENAI_API_KEY" \
+            -o openai_test.json
+
+          echo "=== OpenAI Response ==="
+          cat openai_test.json
+
+
+      ####################################################################
+      # WŁAŚCIWE URUCHOMIENIE TWOJEGO PROJEKTU
+      ####################################################################
       - name: Run AI Data Quality Guardian
         env:
-          TABLEAU_CLOUD_URL: ${{ secrets.TABLEAU_CLOUD_URL }}
-          TABLEAU_SITE_ID: ${{ secrets.TABLEAU_SITE_ID }}
-          TABLEAU_TOKEN_NAME: ${{ secrets.TABLEAU_TOKEN_NAME }}
-          TABLEAU_TOKEN_SECRET: ${{ secrets.TABLEAU_TOKEN_SECRET }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-
-          SMTP_SERVER: ${{ secrets.SMTP_HOST }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          SMTP_EMAIL_FROM: ${{ secrets.EMAIL_FROM }}
-          SMTP_EMAIL_TO: ${{ secrets.EMAIL_TO }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-
-          JIRA_URL: ${{ secrets.JIRA_URL }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
-
+          TABLEAU_CLOUD_URL: "${{ secrets.TABLEAU_CLOUD_URL }}"
+          TABLEAU_SITE_ID: "${{ secrets.TABLEAU_SITE_ID }}"
+          TABLEAU_TOKEN_NAME: "${{ secrets.TABLEAU_TOKEN_NAME }}"
+          TABLEAU_TOKEN_SECRET: "${{ secrets.TABLEAU_TOKEN_SECRET }}"
+          OPENAI_API_KEY: "${{ secrets.OPENAI_API_KEY }}"
+          SLACK_WEBHOOK_URL: "${{ secrets.SLACK_WEBHOOK_URL }}"
+          SMTP_SERVER: "${{ secrets.SMTP_SERVER }}"
+          SMTP_USERNAME: "${{ secrets.SMTP_USERNAME }}"
+          SMTP_PASSWORD: "${{ secrets.SMTP_PASSWORD }}"
+          SMTP_EMAIL_FROM: "${{ secrets.SMTP_EMAIL_FROM }}"
+          SMTP_EMAIL_TO: "${{ secrets.SMTP_EMAIL_TO }}"
+          JIRA_API_EMAIL: "${{ secrets.JIRA_API_EMAIL }}"
+          JIRA_API_TOKEN: "${{ secrets.JIRA_API_TOKEN }}"
+          JIRA_BASE_URL: "${{ secrets.JIRA_BASE_URL }}"
+          JIRA_PROJECT_KEY: "${{ secrets.JIRA_PROJECT_KEY }}"
         run: python -m src.main
