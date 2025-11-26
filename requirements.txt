@@ -8,3 +8,4 @@ slack_sdk
 jira
 matplotlib
 openpyxl
+httpx>=0.24.0
