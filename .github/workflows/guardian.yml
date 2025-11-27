@@ -3,7 +3,7 @@ name: AI Data Quality Guardian
 on:
   workflow_dispatch:
   schedule:
-    - cron: "0 7 * * *"   # codziennie 07:00
+    - cron: "0 */6 * * *"
 
 jobs:
   run-guardian:
@@ -17,7 +17,7 @@ jobs:
         uses: actions/checkout@v4
 
       # -----------------------------
-      # PYTHON SETUP
+      # PYTHON
       # -----------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -28,54 +28,51 @@ jobs:
         run: |
           python3 -m pip install --upgrade pip
           pip install -r requirements.txt
+          pip install openai jira
 
       # -----------------------------
-      # LOAD SECRETS + AUTO-TRIM
+      # LOAD & TRIM SECRETS
       # -----------------------------
-      - name: Load secrets (trimmed)
+      - name: Load secrets (trim + export)
         run: |
-          # Trim secrets to avoid \r or \n errors from browser copy/paste
-          export JIRA_URL="$(echo "${{ secrets.JIRA_URL }}" | tr -d '\r' | tr -d '\n' | xargs)"
-          export JIRA_EMAIL="$(echo "${{ secrets.JIRA_EMAIL }}" | tr -d '\r' | tr -d '\n' | xargs)"
-          export JIRA_API_TOKEN="$(echo "${{ secrets.JIRA_API_TOKEN }}" | tr -d '\r' | tr -d '\n' | xargs)"
-          export JIRA_SPACE_KEY="$(echo "${{ secrets.JIRA_SPACE_KEY }}" | tr -d '\r' | tr -d '\n' | xargs)"
+          # === TRIM SECRETS ===
+          trim() { echo "$1" | tr -d '\r' | tr -d '\n' | xargs; }
 
-          export OPENAI_API_KEY="$(echo "${{ secrets.OPENAI_API_KEY }}" | tr -d '\r' | tr -d '\n' | xargs)"
-          export SLACK_WEBHOOK_URL="${{ secrets.SLACK_WEBHOOK_URL }}"
-          export EMAIL_TO="${{ secrets.EMAIL_TO }}"
-          export EMAIL_FROM="${{ secrets.EMAIL_FROM }}"
-          export SMTP_HOST="${{ secrets.SMTP_HOST }}"
-          export SMTP_PORT="${{ secrets.SMTP_PORT }}"
-          export SMTP_USERNAME="${{ secrets.SMTP_USERNAME }}"
-          export SMTP_PASSWORD="${{ secrets.SMTP_PASSWORD }}"
-          export TABLEAU_CLOUD_URL="${{ secrets.TABLEAU_CLOUD_URL }}"
-          export TABLEAU_SITE_ID="${{ secrets.TABLEAU_SITE_ID }}"
-          export TABLEAU_TOKEN_NAME="${{ secrets.TABLEAU_TOKEN_NAME }}"
-          export TABLEAU_TOKEN_SECRET="${{ secrets.TABLEAU_TOKEN_SECRET }}"
+          echo "JIRA_URL=$(trim "${{ secrets.JIRA_URL }}")" >> $GITHUB_ENV
+          echo "JIRA_EMAIL=$(trim "${{ secrets.JIRA_EMAIL }}")" >> $GITHUB_ENV
+          echo "JIRA_API_TOKEN=$(trim "${{ secrets.JIRA_API_TOKEN }}")" >> $GITHUB_ENV
+          echo "JIRA_SPACE_KEY=$(trim "${{ secrets.JIRA_SPACE_KEY }}")" >> $GITHUB_ENV
 
-          # Export to GITHUB_ENV so next steps see the variables
-          {
-            echo "JIRA_URL=$JIRA_URL"
-            echo "JIRA_EMAIL=$JIRA_EMAIL"
-            echo "JIRA_API_TOKEN=$JIRA_API_TOKEN"
-            echo "JIRA_SPACE_KEY=$JIRA_SPACE_KEY"
-            echo "OPENAI_API_KEY=$OPENAI_API_KEY"
-          } >> $GITHUB_ENV
+          echo "OPENAI_API_KEY=$(trim "${{ secrets.OPENAI_API_KEY }}")" >> $GITHUB_ENV
+
+          echo "SLACK_WEBHOOK_URL=$(trim "${{ secrets.SLACK_WEBHOOK_URL }}")" >> $GITHUB_ENV
+          echo "EMAIL_FROM=$(trim "${{ secrets.EMAIL_FROM }}")" >> $GITHUB_ENV
+          echo "EMAIL_TO=$(trim "${{ secrets.EMAIL_TO }}")" >> $GITHUB_ENV
+          echo "SMTP_HOST=$(trim "${{ secrets.SMTP_HOST }}")" >> $GITHUB_ENV
+          echo "SMTP_PORT=$(trim "${{ secrets.SMTP_PORT }}")" >> $GITHUB_ENV
+          echo "SMTP_USERNAME=$(trim "${{ secrets.SMTP_USERNAME }}")" >> $GITHUB_ENV
+          echo "SMTP_PASSWORD=$(trim "${{ secrets.SMTP_PASSWORD }}")" >> $GITHUB_ENV
+
+          echo "TABLEAU_CLOUD_URL=$(trim "${{ secrets.TABLEAU_CLOUD_URL }}")" >> $GITHUB_ENV
+          echo "TABLEAU_SITE_ID=$(trim "${{ secrets.TABLEAU_SITE_ID }}")" >> $GITHUB_ENV
+          echo "TABLEAU_TOKEN_NAME=$(trim "${{ secrets.TABLEAU_TOKEN_NAME }}")" >> $GITHUB_ENV
+          echo "TABLEAU_TOKEN_SECRET=$(trim "${{ secrets.TABLEAU_TOKEN_SECRET }}")" >> $GITHUB_ENV
 
       # -----------------------------
-      # SECRET DEBUGGING
+      # DEBUG
       # -----------------------------
       - name: Debug secrets
         run: |
-          echo "JIRA_URL length: ${#JIRA_URL}"
-          echo "JIRA_EMAIL length: ${#JIRA_EMAIL}"
-          echo "JIRA_API_TOKEN length: ${#JIRA_API_TOKEN}"
+          echo "JIRA_URL length = ${#JIRA_URL}"
+          echo "JIRA_EMAIL length = ${#JIRA_EMAIL}"
+          echo "JIRA_API_TOKEN length = ${#JIRA_API_TOKEN}"
           echo "JIRA_SPACE_KEY = $JIRA_SPACE_KEY"
-          echo "OpenAI key length: ${#OPENAI_API_KEY}"
+          echo "OPENAI_API_KEY length = ${#OPENAI_API_KEY}"
+          echo "SLACK_WEBHOOK_URL length = ${#SLACK_WEBHOOK_URL}"
+          echo "SMTP_HOST length = ${#SMTP_HOST}"
 
       # -----------------------------
-      # RUN MAIN APP
+      # RUN APP
       # -----------------------------
       - name: Run Guardian
-        run: |
-          python -m src.main
+        run: python -m src.main
